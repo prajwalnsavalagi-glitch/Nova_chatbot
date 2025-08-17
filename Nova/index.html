@@ -1,295 +1,148 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Independent Chatbot</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+import React, { useState, useRef, useEffect } from 'react';
+
+// Main App component
+export default function App() {
+  // State for the chat messages and the user's input
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  // Scroll to the bottom of the chat window when new messages arrive
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // Function to send a message to the AI
+  const sendMessage = async (e) => {
+    // Prevent form submission which reloads the page
+    e.preventDefault();
+
+    // Do nothing if the input is empty or we're already loading
+    if (!input.trim() || isLoading) return;
+
+    // Add the user's message to the chat history
+    const userMessage = { text: input, sender: 'user' };
+    setMessages(currentMessages => [...currentMessages, userMessage]);
+    setInput('');
+    setIsLoading(true);
+
+    try {
+      // The API URL now points to a local server that you will run
+      // This server will be responsible for loading and running your open-source LLM
+      // We've changed this to a relative path so it works on Replit
+      const apiUrl = '/chat';
+
+      // Create a payload to send to your self-hosted server
+      const payload = {
+        prompt: input,
+      };
+
+      // Make the API call to your self-hosted server
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      const result = await response.json();
+
+      // We assume your server returns a JSON object with a 'text' field
+      if (result && result.text) {
+        const aiResponseText = result.text;
+        const aiMessage = { text: aiResponseText, sender: 'ai' };
         
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            color: #1f2937;
-        }
+        // Add the AI's response to the chat history
+        setMessages(currentMessages => [...currentMessages, aiMessage]);
+      } else {
+        // Handle cases where the response structure is unexpected
+        console.error("Unexpected server response format:", result);
+        setMessages(currentMessages => [...currentMessages, { text: "Sorry, I'm having trouble connecting to the local model. Please check your server.", sender: 'ai' }]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch from local server:", error);
+      setMessages(currentMessages => [...currentMessages, { text: "Sorry, an error occurred. Is your local server running?", sender: 'ai' }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-        .chat-container {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 600px;
-            height: 90vh;
-            border-radius: 1rem;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            background-color: #fff;
-        }
+  return (
+    <div className="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 font-sans">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 p-4 shadow-md text-center text-xl font-bold text-gray-800 dark:text-white">
+        My Independent Chatbot
+      </div>
 
-        .chat-header {
-            padding: 1rem;
-            text-align: center;
-            font-size: 1.25rem;
-            font-weight: 700;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        .chat-box {
-            flex: 1;
-            padding: 1rem;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            background-color: #f9fafb;
-        }
-        
-        /* Message styles */
-        .message-container {
-            display: flex;
-        }
-
-        .message {
-            max-width: 80%;
-            padding: 0.75rem 1rem;
-            border-radius: 1.25rem;
-            word-wrap: break-word;
-            transition: all 0.3s ease;
-        }
-
-        .user-message-container {
-            justify-content: flex-end;
-        }
-
-        .user-message {
-            background-color: #3b82f6;
-            color: #fff;
-            border-bottom-right-radius: 0.5rem;
-        }
-
-        .ai-message-container {
-            justify-content: flex-start;
-        }
-
-        .ai-message {
-            background-color: #e5e7eb;
-            color: #1f2937;
-            border-bottom-left-radius: 0.5rem;
-        }
-
-        /* Loading indicator */
-        .loading-dots {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 1.5rem;
-            
-        }
-
-        .dot {
-            width: 0.5rem;
-            height: 0.5rem;
-            background-color: #6b7280;
-            border-radius: 50%;
-            margin: 0 0.2rem;
-            animation: bounce 1.4s infinite ease-in-out both;
-        }
-
-        .dot:nth-child(1) { animation-delay: -0.32s; }
-        .dot:nth-child(2) { animation-delay: -0.16s; }
-        .dot:nth-child(3) { animation-delay: 0s; }
-
-        @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1.0); }
-        }
-
-        /* Input area */
-        .chat-input {
-            display: flex;
-            padding: 1rem;
-            background-color: #fff;
-            border-top: 1px solid #e5e7eb;
-        }
-
-        .chat-input input {
-            flex: 1;
-            padding: 0.75rem 1.5rem;
-            border-radius: 9999px;
-            border: 1px solid #d1d5db;
-            font-size: 1rem;
-            outline: none;
-            transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .chat-input input:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
-        }
-
-        .chat-input button {
-            padding: 0.75rem 1rem;
-            margin-left: 0.5rem;
-            border: none;
-            background-color: #3b82f6;
-            color: #fff;
-            border-radius: 9999px;
-            cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            transition: background-color 0.2s ease, transform 0.1s ease;
-        }
-
-        .chat-input button:hover {
-            background-color: #2563eb;
-        }
-        
-        .chat-input button:disabled {
-            background-color: #93c5fd;
-            cursor: not-allowed;
-        }
-        
-        @media (max-width: 768px) {
-            .chat-container {
-                height: 100vh;
-                border-radius: 0;
-            }
-        }
-    </style>
-</head>
-<body>
-
-    <div class="chat-container">
-        <div class="chat-header">
-            My Independent Chatbot
-        </div>
-        <div class="chat-box" id="chat-box">
-            <!-- Chat messages will be dynamically added here -->
-            <div class="ai-message-container message-container">
-                <div class="ai-message message">Hello! I am your independent chatbot. Ask me anything!</div>
+      {/* Chat Messages Display Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z" />
+            </svg>
+            <p>Start a new conversation!</p>
+            <p>Type your message below.</p>
+          </div>
+        )}
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-xs md:max-w-md lg:max-w-xl p-3 rounded-xl shadow-lg transition-all duration-300 ease-in-out transform ${
+                message.sender === 'user'
+                  ? 'bg-blue-500 text-white rounded-br-none'
+                  : 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-white rounded-bl-none'
+              }`}
+            >
+              <p className="whitespace-pre-wrap">{message.text}</p>
             </div>
-        </div>
-        <div class="chat-input">
-            <input type="text" id="user-input" placeholder="Type your message here...">
-            <button id="send-button">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-            </button>
-        </div>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white p-3 rounded-xl rounded-bl-none animate-pulse">
+              <div className="flex space-x-1">
+                <div className="w-1.5 h-1.5 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce"></div>
+                <div className="w-1.5 h-1.5 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-1.5 h-1.5 bg-gray-500 dark:bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Form at the bottom */}
+      <div className="p-4 bg-white dark:bg-gray-800 shadow-inner">
+        <form onSubmit={sendMessage} className="flex space-x-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="flex-1 p-3 rounded-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
+            placeholder="Type your message here..."
+            disabled={isLoading}
+          />
+          <button
+            type="submit"
+            className="p-3 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-200 transform disabled:bg-blue-400 disabled:cursor-not-allowed"
+            disabled={isLoading || !input.trim()}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        </form>
+      </div>
     </div>
-
-    <script>
-        // Get references to the HTML elements
-        const chatBox = document.getElementById('chat-box');
-        const userInput = document.getElementById('user-input');
-        const sendButton = document.getElementById('send-button');
-
-        // Function to create and add a new message bubble to the chat
-        function addMessage(text, sender) {
-            const container = document.createElement('div');
-            container.classList.add('message-container');
-            container.classList.add(sender === 'user' ? 'user-message-container' : 'ai-message-container');
-
-            const messageBubble = document.createElement('div');
-            messageBubble.classList.add('message');
-            messageBubble.classList.add(sender === 'user' ? 'user-message' : 'ai-message');
-            messageBubble.textContent = text;
-            
-            container.appendChild(messageBubble);
-            chatBox.appendChild(container);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
-        // Function to show a loading indicator
-        function showLoading() {
-            const loadingContainer = document.createElement('div');
-            loadingContainer.id = 'loading';
-            loadingContainer.classList.add('ai-message-container', 'message-container');
-            
-            const loadingDots = document.createElement('div');
-            loadingDots.classList.add('loading-dots');
-            loadingDots.innerHTML = `
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-            `;
-            
-            const loadingBubble = document.createElement('div');
-            loadingBubble.classList.add('ai-message', 'message');
-            loadingBubble.appendChild(loadingDots);
-
-            loadingContainer.appendChild(loadingBubble);
-            chatBox.appendChild(loadingContainer);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-        
-        // Function to hide the loading indicator
-        function hideLoading() {
-            const loadingEl = document.getElementById('loading');
-            if (loadingEl) {
-                loadingEl.remove();
-            }
-        }
-
-        // Main function to send a message
-        async function sendMessage() {
-            const prompt = userInput.value.trim();
-            if (!prompt) return; // Do nothing if the input is empty
-
-            // Add the user's message to the chat
-            addMessage(prompt, 'user');
-            userInput.value = ''; // Clear the input field
-
-            // Show a loading indicator and disable the send button
-            showLoading();
-            sendButton.disabled = true;
-            userInput.disabled = true;
-
-            try {
-                // The API URL points to your Python Flask server
-                const apiUrl = 'http://localhost:5000/chat';
-
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ prompt: prompt })
-                });
-
-                const result = await response.json();
-
-                // Add the AI's response to the chat
-                if (result.text) {
-                    addMessage(result.text, 'ai');
-                } else {
-                    addMessage("Sorry, I couldn't get a response. Please check your server.", 'ai');
-                }
-            } catch (error) {
-                console.error("Error connecting to server:", error);
-                addMessage("Oops! It seems the server isn't running. Please start your Python server.", 'ai');
-            } finally {
-                // Hide the loading indicator and re-enable the input
-                hideLoading();
-                sendButton.disabled = false;
-                userInput.disabled = false;
-                userInput.focus();
-            }
-        }
-
-        // Add event listeners for sending messages
-        sendButton.addEventListener('click', sendMessage);
-        userInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        });
-    </script>
-</body>
-</html>
+  );
+}
