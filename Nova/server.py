@@ -11,17 +11,17 @@ app = Flask(__name__)
 CORS(app)
 
 # ----------------------------------------------------
-# We are switching back to the smaller, more efficient 'distilgpt2' model.
-# This model is much easier to run and should fix the loading error we saw before.
-print("Loading the language model. This will take a moment...")
+# We are now loading the larger, more powerful 'gpt2' model.
+# Since we are running this on a virtual server, we should not face the memory issues
+# we had when running on a local computer.
+print("Loading the language model. This will take a moment, especially the first time...")
 llm_pipeline = None  # Initialize the pipeline as None outside the try block
 try:
     # Use 'text-generation' pipeline for conversational AI
-    # We are now using the 'distilgpt2' model from Hugging Face.
-    llm_pipeline = pipeline('text-generation', model='distilgpt2')
+    llm_pipeline = pipeline('text-generation', model='gpt2')
     print("Model loaded successfully!")
 except Exception as e:
-    # This line is new! It will print the exact error to your terminal.
+    # This line will print the exact error to the terminal if the model fails to load.
     print(f"An error occurred while loading the model: {e}")
 
 # ----------------------------------------------------
